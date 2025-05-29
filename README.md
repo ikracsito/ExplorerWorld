@@ -1,6 +1,6 @@
 # WorldExplorer - Explorador de Países 🌎
 
-Una aplicación web moderna que te permite explorar información detallada sobre todos los países del mundo. Construida con Vue 3, TypeScript, Tailwind CSS y AG Grid. 
+Una aplicación web que te permite explorar información detallada sobre todos los países del mundo. Construida con Vue 3, TypeScript, Tailwind CSS y AG Grid. 
 
 ## Características Principales
 
