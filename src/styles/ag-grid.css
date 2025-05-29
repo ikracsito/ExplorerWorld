@@ -1,0 +1,77 @@
+.ag-theme-alpine {
+    --ag-background-color: white;
+    --ag-header-background-color: #f8fafc;
+    --ag-odd-row-background-color: #f8fafc;
+    --ag-row-hover-color: #f1f5f9;
+    --ag-font-family: system-ui, -apple-system, sans-serif;
+    --ag-row-height: 56px;
+    --ag-cell-horizontal-padding: 8px;
+    --ag-header-height: 48px;
+    --ag-header-foreground-color: #1f2937;
+    --ag-font-size: 14px;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.ag-root-wrapper {
+    border: none !important;
+}
+
+.ag-header {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.ag-header-cell {
+    font-weight: 600;
+}
+
+.ag-row {
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.ag-row:hover {
+    background-color: #f8fafc;
+}
+
+.ag-cell {
+    display: flex !important;
+    align-items: center;
+}
+
+/* Specific styles for flag column */
+.ag-cell[col-id="flag"] {
+    padding: 8px !important;
+    justify-content: center !important;
+}
+
+.ag-cell[col-id="flag"] img {
+    transition: transform 0.2s ease;
+}
+
+.ag-cell[col-id="flag"]:hover img {
+    transform: scale(1.1);
+}
+
+/* Pagination styles */
+.ag-paging-panel {
+    height: 56px;
+    padding: 0 16px;
+    border-top: 1px solid #e5e7eb;
+    color: #4b5563;
+    font-size: 14px;
+}
+
+.ag-paging-button {
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.ag-paging-button:hover:not(.ag-disabled) {
+    background-color: #f3f4f6;
+}
+
+.ag-disabled {
+    opacity: 0.5;
+    cursor: default;
+} 

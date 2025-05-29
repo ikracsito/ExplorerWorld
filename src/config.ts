@@ -1,0 +1,4 @@
+export const config = {
+  OPENWEATHER_API_KEY: '773ae8068b9eb518413aa1bf7ea495f1',
+  TIMEZONE_API_KEY: 'QTYA3IOVBG1U'
+}; 

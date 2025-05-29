@@ -1,0 +1,37 @@
+{
+  "name": "countries-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "ag-grid-community": "^30.2.1",
+    "ag-grid-vue3": "^30.2.1",
+    "axios": "^1.9.0",
+    "chart.js": "^4.4.9",
+    "luxon": "^3.6.1",
+    "unsplash-js": "^7.0.19",
+    "vue": "^3.3.4",
+    "vue-chartjs": "^5.3.2"
+  },
+  "devDependencies": {
+    "@testing-library/vue": "^8.1.0",
+    "@vitejs/plugin-vue": "^4.3.4",
+    "@vue/compiler-sfc": "^3.3.4",
+    "@vue/test-utils": "^2.4.6",
+    "autoprefixer": "^10.4.15",
+    "happy-dom": "^17.5.6",
+    "postcss": "^8.4.29",
+    "tailwindcss": "^3.3.3",
+    "typescript": "^5.2.2",
+    "vite": "^4.4.9",
+    "vitest": "^3.1.4",
+    "vue-tsc": "^1.8.11"
+  }
+}

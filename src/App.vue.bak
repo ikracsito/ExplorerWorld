@@ -1,0 +1,1238 @@
+<script setup lang="ts">
+import { ref, onMounted, computed, watch } from 'vue'
+import axios from 'axios'
+import { TransitionRoot, TransitionGroup, Transition } from 'vue'
+import CountriesTable from './components/CountriesTable.vue'
+import Dashboard from './components/Dashboard.vue'
+import { config } from './config'
+
+interface Country {
+  name: { common: string; official: string }
+  capital: string[]
+  population: number
+  region: string
+  subregion: string
+  flags: { png: string }
+  languages: Record<string, string>
+  currencies: Record<string, { name: string; symbol: string }>
+  area: number
+  cca2: string
+  latlng: number[]
+}
+
+interface WeatherData {
+  temp: number;
+  description: string;
+  icon: string;
+}
+
+// View state
+const isGridView = ref(true)
+const isTableView = ref(false)
+const isDashboardView = ref(false)
+
+// Computed property for current view
+const currentView = computed(() => {
+  if (isDashboardView.value) return 'dashboard'
+  if (isTableView.value) return 'table'
+  return isGridView.value ? 'grid' : 'list'
+})
+
+// Toggle view function
+const toggleView = (view) => {
+  isDashboardView.value = view === 'dashboard'
+  if (view !== 'dashboard') {
+    isTableView.value = view === 'table'
+    isGridView.value = view === 'grid'
+  }
+}
+
+// Dark mode state
+const isDarkMode = ref(false)
+
+// Initialize dark mode from localStorage
+onMounted(() => {
+  const savedMode = localStorage.getItem('darkMode')
+  isDarkMode.value = savedMode === 'true'
+  applyDarkMode(isDarkMode.value)
+})
+
+// Watch for changes in dark mode
+watch(isDarkMode, (newValue) => {
+  localStorage.setItem('darkMode', newValue.toString())
+  applyDarkMode(newValue)
+})
+
+// Apply dark mode to document
+const applyDarkMode = (dark: boolean) => {
+  if (dark) {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+// Función para obtener una imagen aleatoria del país
+const getRandomImageService = (country: string) => {
+  const services = [
+    (name: string) => `https://source.unsplash.com/featured/400x300/?${encodeURIComponent(name + ' landmarks')}&random=${Date.now()}`,
+    (name: string) => `https://loremflickr.com/400/300/${encodeURIComponent(name + ',landmarks,city')}/${Math.random()}`,
+    (name: string) => `https://picsum.photos/seed/${encodeURIComponent(name)}/400/300`
+  ]
+  const index = Math.floor(Math.random() * services.length)
+  return services[index](country)
+}
+
+// Modal state
+const selectedCountry = ref<Country | null>(null)
+const showModal = ref(false)
+const isLoadingImage = ref(false)
+const currentModalPage = ref(1)
+const totalModalPages = 2
+
+// Weather and time state for comparison
+const comparisonWeather = ref<Record<string, WeatherData>>({})
+const comparisonTime = ref<Record<string, string>>({})
+const comparisonTimeZones = ref<Record<string, number>>({})
+const comparisonIntervals = ref<Record<string, number>>({})
+
+// Update comparison data
+const updateComparisonData = async (country: Country) => {
+  if (country.capital?.[0]) {
+    try {
+      const response = await axios.get(
+        `http://api.openweathermap.org/data/2.5/weather?q=${country.capital[0]}&units=metric&appid=${config.OPENWEATHER_API_KEY}`
+      )
+      
+      if (response.data && response.data.main && response.data.weather && response.data.weather.length > 0) {
+        comparisonWeather.value[country.name.common] = {
+          temp: Math.round(response.data.main.temp),
+          description: response.data.weather[0].description,
+          icon: `http://openweathermap.org/img/wn/${response.data.weather[0].icon}@2x.png`
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching comparison weather:', error)
+    }
+  }
+
+  if (country.latlng?.length === 2) {
+    try {
+      const response = await axios.get(
+        `https://api.timezonedb.com/v2.1/get-time-zone?key=${config.TIMEZONE_API_KEY}&format=json&by=position&lat=${country.latlng[0]}&lng=${country.latlng[1]}`
+      )
+      
+      if (response.data && response.data.gmtOffset) {
+        comparisonTimeZones.value[country.name.common] = response.data.gmtOffset
+        updateComparisonTime(country.name.common)
+        
+        // Clear existing interval if any
+        if (comparisonIntervals.value[country.name.common]) {
+          clearInterval(comparisonIntervals.value[country.name.common])
+        }
+        
+        // Start new interval
+        comparisonIntervals.value[country.name.common] = setInterval(
+          () => updateComparisonTime(country.name.common),
+          1000
+        )
+      }
+    } catch (error) {
+      console.error('Error fetching comparison time:', error)
+    }
+  }
+}
+
+// Update time for comparison
+const updateComparisonTime = (countryName: string) => {
+  if (comparisonTimeZones.value[countryName] !== undefined) {
+    const now = new Date()
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000)
+    const localDate = new Date(utc + (comparisonTimeZones.value[countryName] * 1000))
+    
+    const hours = formatTimeUnit(localDate.getHours())
+    const minutes = formatTimeUnit(localDate.getMinutes())
+    const seconds = formatTimeUnit(localDate.getSeconds())
+    
+    comparisonTime.value[countryName] = `${hours}:${minutes}:${seconds}`
+  }
+}
+
+// Clean up intervals when closing comparison
+const clearComparisonIntervals = () => {
+  Object.values(comparisonIntervals.value).forEach(interval => {
+    clearInterval(interval)
+  })
+  comparisonIntervals.value = {}
+}
+
+// Update toggleComparison function
+const toggleComparison = async (country: Country) => {
+  const index = comparisonList.value.findIndex(c => c.name.common === country.name.common)
+  if (index === -1) {
+    if (comparisonList.value.length < 3) {
+      comparisonList.value.push(country)
+      await updateComparisonData(country)
+    }
+  } else {
+    comparisonList.value.splice(index, 1)
+    delete comparisonWeather.value[country.name.common]
+    delete comparisonTime.value[country.name.common]
+    if (comparisonIntervals.value[country.name.common]) {
+      clearInterval(comparisonIntervals.value[country.name.common])
+      delete comparisonIntervals.value[country.name.common]
+    }
+  }
+}
+
+// Next/Previous page in modal
+const nextModalPage = () => {
+  if (currentModalPage.value < totalModalPages) {
+    currentModalPage.value++
+  }
+}
+
+const prevModalPage = () => {
+  if (currentModalPage.value > 1) {
+    currentModalPage.value--
+  }
+}
+
+// Clean up when closing modal
+const closeModal = () => {
+  if (timeInterval.value) {
+    clearInterval(timeInterval.value)
+    timeInterval.value = null
+  }
+  showModal.value = false
+  selectedCountry.value = null
+  currentModalPage.value = 1
+}
+
+// State
+const countries = ref<Country[]>([])
+const searchQuery = ref('')
+const regionFilter = ref('')
+const isLoading = ref(true)
+const currentPage = ref(1)
+const itemsPerPage = ref(12)
+
+// Favorites functionality
+const favorites = ref<Country[]>([])
+
+// Initialize favorites from localStorage
+onMounted(() => {
+  const savedFavorites = localStorage.getItem('favorites')
+  if (savedFavorites) {
+    favorites.value = JSON.parse(savedFavorites)
+  }
+})
+
+// Watch favorites for changes and save to localStorage
+watch(favorites, (newValue) => {
+  localStorage.setItem('favorites', JSON.stringify(newValue))
+}, { deep: true })
+
+const toggleFavorite = (country: Country) => {
+  const index = favorites.value.findIndex(f => f.name.common === country.name.common)
+  if (index === -1) {
+    favorites.value.push(country)
+  } else {
+    favorites.value.splice(index, 1)
+  }
+}
+
+const isFavorite = (country: Country) => {
+  return favorites.value.some(f => f.name.common === country.name.common)
+}
+
+// Comparison functionality
+const comparisonList = ref<Country[]>([])
+const showComparison = ref(false)
+
+const isInComparison = (country: Country) => {
+  return comparisonList.value.some(c => c.name.common === country.name.common)
+}
+
+const clearComparison = () => {
+  comparisonList.value = []
+  showComparison.value = false
+  clearComparisonIntervals()
+}
+
+// Show favorites only
+const showFavoritesOnly = ref(false)
+
+// Computed property for filtered and paginated countries
+const filteredCountries = computed(() => {
+  return countries.value
+    .filter(country => {
+      const matchesSearch = country.name.common.toLowerCase().includes(searchQuery.value.toLowerCase())
+      const matchesRegion = !regionFilter.value || country.region === regionFilter.value
+      const matchesFavorites = !showFavoritesOnly.value || isFavorite(country)
+      return matchesSearch && matchesRegion && matchesFavorites
+    })
+    .map(country => ({
+      flag: country.flags.png,
+      name: country.name.common,
+      capital: country.capital?.[0] || 'N/A',
+      population: country.population,
+      region: country.region,
+      ...country
+    }))
+})
+
+const paginatedCountries = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
+  return filteredCountries.value.slice(start, end)
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredCountries.value.length / itemsPerPage.value)
+})
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+  }
+}
+
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
+}
+
+// Fetch countries data
+onMounted(async () => {
+  try {
+    const response = await axios.get('https://restcountries.com/v3.1/all')
+    countries.value = response.data
+  } catch (error) {
+    console.error('Error fetching countries:', error)
+  } finally {
+    isLoading.value = false
+  }
+})
+
+// Export functionality
+const exportToCSV = () => {
+  // Headers for the CSV
+  const headers = [
+    'Country',
+    'Official Name',
+    'Capital',
+    'Region',
+    'Subregion',
+    'Population',
+    'Area (km²)',
+    'Languages',
+    'Currencies'
+  ]
+
+  // Convert filtered countries to CSV format
+  const csvData = filteredCountries.value.map(country => [
+    country.name.common,
+    country.name.official,
+    country.capital?.[0] || 'N/A',
+    country.region,
+    country.subregion || 'N/A',
+    country.population,
+    country.area,
+    Object.values(country.languages || {}).join(', '),
+    Object.values(country.currencies || {})
+      .map(c => `${c.name} (${c.symbol})`)
+      .join(', ')
+  ])
+
+  // Combine headers and data
+  const csvContent = [
+    headers.join(','),
+    ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+  ].join('\n')
+
+  // Create blob and download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', `countries_export_${new Date().toISOString().split('T')[0]}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// Función para calcular el zoom basado en el área del país
+const getCountryZoom = (area: number) => {
+  return 4; // Zoom fijo para todos los países
+}
+
+// Función para calcular las coordenadas del tile
+const getTileCoordinates = (lat: number, lon: number, zoom: number) => {
+  // Si es Paraguay, usamos sus coordenadas ajustadas
+  if (selectedCountry.value?.name.common === 'Paraguay') {
+    lat = -25.5; // Un poco al norte de Buenos Aires
+    lon = -57.5; // Ajustado hacia Asunción
+  }
+  const x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom))
+  const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))
+  return { x, y }
+}
+
+// Weather and location state
+const weatherData = ref<WeatherData | null>(null)
+const userLocation = ref<{ lat: number; lon: number } | null>(null)
+const distanceToCountry = ref<number | null>(null)
+const localTime = ref<string | null>(null)
+const timeInterval = ref<number | null>(null)
+const timeZoneOffset = ref<number>(0)
+
+// Format time with leading zeros
+const formatTimeUnit = (unit: number): string => {
+  return unit < 10 ? `0${unit}` : `${unit}`
+}
+
+// Update local time
+const updateLocalTime = () => {
+  if (timeZoneOffset.value !== null) {
+    const now = new Date()
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000)
+    const localDate = new Date(utc + (timeZoneOffset.value * 1000))
+    
+    const hours = formatTimeUnit(localDate.getHours())
+    const minutes = formatTimeUnit(localDate.getMinutes())
+    const seconds = formatTimeUnit(localDate.getSeconds())
+    
+    localTime.value = `${hours}:${minutes}:${seconds}`
+  }
+}
+
+// Get user's location
+const getUserLocation = () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        userLocation.value = {
+          lat: position.coords.latitude,
+          lon: position.coords.longitude
+        }
+      },
+      (error) => {
+        console.error('Error getting location:', error)
+      }
+    )
+  }
+}
+
+// Calculate distance between two points using Haversine formula
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
+}
+
+// Get weather data for a capital city
+const getWeatherData = async (capital: string) => {
+  try {
+    console.log('Fetching weather for:', capital)
+    const url = `http://api.openweathermap.org/data/2.5/weather?q=${capital}&units=metric&appid=${config.OPENWEATHER_API_KEY}`
+    console.log('Weather API URL:', url)
+    
+    const response = await axios.get(url)
+    console.log('Weather API response:', response.data)
+    
+    if (response.data && response.data.main && response.data.weather && response.data.weather.length > 0) {
+      weatherData.value = {
+        temp: Math.round(response.data.main.temp),
+        description: response.data.weather[0].description,
+        icon: `http://openweathermap.org/img/wn/${response.data.weather[0].icon}@2x.png`
+      }
+      console.log('Weather data set:', weatherData.value)
+    } else {
+      console.error('Invalid weather data structure:', response.data)
+      weatherData.value = null
+    }
+  } catch (error: any) {
+    console.error('Error fetching weather:', error.response?.data || error.message)
+    weatherData.value = null
+  }
+}
+
+// Get local time for a country
+const getLocalTime = async (lat: number, lon: number) => {
+  try {
+    const response = await axios.get(
+      `https://api.timezonedb.com/v2.1/get-time-zone?key=${config.TIMEZONE_API_KEY}&format=json&by=position&lat=${lat}&lng=${lon}`
+    )
+    
+    if (response.data && response.data.gmtOffset) {
+      timeZoneOffset.value = response.data.gmtOffset
+      updateLocalTime()
+      
+      // Clear existing interval if any
+      if (timeInterval.value) {
+        clearInterval(timeInterval.value)
+      }
+      
+      // Start new interval
+      timeInterval.value = setInterval(updateLocalTime, 1000)
+    }
+  } catch (error) {
+    console.error('Error fetching time:', error)
+    localTime.value = null
+  }
+}
+
+// Modal functions
+const openCountryModal = async (country: Country) => {
+  selectedCountry.value = country
+  showModal.value = true
+  currentModalPage.value = 1
+
+  if (country.capital?.[0]) {
+    await getWeatherData(country.capital[0])
+  }
+  
+  if (country.latlng?.length === 2) {
+    await getLocalTime(country.latlng[0], country.latlng[1])
+  }
+
+  if (userLocation.value && country.latlng?.length === 2) {
+    distanceToCountry.value = calculateDistance(
+      userLocation.value.lat,
+      userLocation.value.lon,
+      country.latlng[0],
+      country.latlng[1]
+    )
+  }
+}
+</script>
+
+<template>
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Controls Bar -->
+      <div class="flex justify-end gap-4 mb-4">
+        <!-- Dashboard Button -->
+        <button
+          @click="toggleView('dashboard')"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+          :class="{ 'ring-2 ring-blue-500': currentView === 'dashboard' }"
+          title="Dashboard View"
+        >
+          <svg
+            class="w-6 h-6"
+            :class="currentView === 'dashboard' ? 'text-blue-500 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+          <span class="hidden sm:inline text-gray-900 dark:text-white">Dashboard</span>
+        </button>
+
+        <!-- Compare Button -->
+        <button
+          v-if="comparisonList.length > 1"
+          @click="showComparison = true"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-600"
+          title="Compare Selected Countries"
+        >
+          <svg
+            class="w-6 h-6 text-blue-500 dark:text-blue-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+            />
+          </svg>
+          <span class="hidden sm:inline text-gray-900 dark:text-white">
+            Compare ({{ comparisonList.length }})
+          </span>
+        </button>
+
+        <!-- Favorites Toggle -->
+        <button
+          @click="showFavoritesOnly = !showFavoritesOnly"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+          :class="{ 'ring-2 ring-yellow-400 dark:ring-yellow-500': showFavoritesOnly }"
+          :title="showFavoritesOnly ? 'Show All Countries' : 'Show Favorites Only'"
+        >
+          <svg
+            class="w-6 h-6"
+            :class="showFavoritesOnly ? 'text-yellow-400 dark:text-yellow-300' : 'text-gray-700 dark:text-gray-300'"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+          </svg>
+        </button>
+
+        <!-- Export Button -->
+        <button
+          @click="exportToCSV"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-600"
+          title="Export to CSV"
+        >
+          <svg
+            class="w-6 h-6 text-gray-700 dark:text-gray-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V8a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          <span class="hidden sm:inline text-gray-900 dark:text-white">Export</span>
+        </button>
+
+        <!-- View Toggle -->
+        <button
+          @click="toggleView('grid')"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+          :class="{ 'ring-2 ring-blue-500': currentView === 'grid' }"
+          title="Grid View"
+        >
+          <svg
+            class="w-6 h-6"
+            :class="currentView === 'grid' ? 'text-blue-500 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+            />
+          </svg>
+        </button>
+
+        <button
+          @click="toggleView('list')"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+          :class="{ 'ring-2 ring-blue-500': currentView === 'list' }"
+          title="List View"
+        >
+          <svg
+            class="w-6 h-6"
+            :class="currentView === 'list' ? 'text-blue-500 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+        </button>
+
+        <button
+          @click="toggleView('table')"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+          :class="{ 'ring-2 ring-blue-500': currentView === 'table' }"
+          title="Table View"
+        >
+          <svg
+            class="w-6 h-6"
+            :class="currentView === 'table' ? 'text-blue-500 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+            />
+          </svg>
+        </button>
+
+        <!-- Dark Mode Toggle -->
+        <button
+          @click="isDarkMode = !isDarkMode"
+          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-md hover:shadow-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+          :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+        >
+          <svg
+            v-if="isDarkMode"
+            class="w-6 h-6 text-yellow-400 dark:text-yellow-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+            />
+          </svg>
+          <svg
+            v-else
+            class="w-6 h-6 text-gray-700 dark:text-gray-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+        <div class="p-6 sm:p-10">
+          <h1 class="text-4xl font-bold text-center mb-8 text-gray-800 dark:text-white">Countries App</h1>
+          
+          <!-- Stats Bar -->
+          <div class="flex justify-between items-center mb-6 text-sm text-gray-600 dark:text-gray-400">
+            <div class="flex gap-4">
+              <span>Total Countries: {{ countries.length }}</span>
+              <span>Filtered: {{ filteredCountries.length }}</span>
+            </div>
+            <div class="flex gap-4">
+              <span>Favorites: {{ favorites.length }}</span>
+              <span>Selected for Comparison: {{ comparisonList.length }}/3</span>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="flex flex-col sm:flex-row gap-4 mb-8">
+            <div class="relative flex-1">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input 
+                type="text" 
+                v-model="searchQuery"
+                placeholder="Search countries..." 
+                class="pl-10 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-150 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+              />
+            </div>
+            <select 
+              v-model="regionFilter"
+              class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-150 min-w-[200px] text-gray-900 dark:text-white"
+            >
+              <option value="">All Regions</option>
+              <option value="Africa">Africa</option>
+              <option value="Americas">Americas</option>
+              <option value="Asia">Asia</option>
+              <option value="Europe">Europe</option>
+              <option value="Oceania">Oceania</option>
+            </select>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="isLoading" class="flex justify-center items-center h-[600px]">
+            <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 dark:border-blue-400 border-t-transparent"></div>
+          </div>
+
+          <!-- Countries Display -->
+          <div v-else>
+            <Transition name="fade" mode="out-in">
+              <!-- Dashboard View -->
+              <div v-if="currentView === 'dashboard'" key="dashboard">
+                <Dashboard 
+                  :countries="countries"
+                  :is-dark-mode="isDarkMode"
+                />
+              </div>
+
+              <!-- Grid View -->
+              <div v-else-if="currentView === 'grid'" key="grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Country Card -->
+                <div 
+                  v-for="country in paginatedCountries" 
+                  :key="country.name.common"
+                  class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-lg dark:shadow-gray-900 relative flex flex-col"
+                >
+                  <div class="flex-1">
+                    <!-- Flag Container -->
+                    <div @click="openCountryModal(country)" class="w-full h-48 relative">
+                      <img 
+                        :src="country.flags.png" 
+                        :alt="country.name.common + ' flag'"
+                        class="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                        @error="$event.target.src='https://via.placeholder.com/320x200?text=No+Flag'"
+                      />
+                    </div>
+                    
+                    <!-- Country Info -->
+                    <div class="p-4">
+                      <div @click="openCountryModal(country)" class="cursor-pointer">
+                        <h3 class="font-semibold text-lg mb-2 text-gray-800 dark:text-white">{{ country.name.common }}</h3>
+                        <div class="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                          <p><span class="font-medium">Capital:</span> {{ country.capital?.[0] || 'N/A' }}</p>
+                          <p><span class="font-medium">Region:</span> {{ country.region }}</p>
+                          <p><span class="font-medium">Population:</span> {{ country.population.toLocaleString() }}</p>
+                        </div>
+                      </div>
+
+                      <!-- Action Buttons -->
+                      <div class="flex justify-end gap-2 mt-4 border-t pt-4 dark:border-gray-700">
+                        <button
+                          @click.stop="toggleFavorite(country)"
+                          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-sm hover:shadow-md transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                          :class="{ 'text-yellow-400 dark:text-yellow-300': isFavorite(country) }"
+                          :title="isFavorite(country) ? 'Remove from Favorites' : 'Add to Favorites'"
+                        >
+                          <svg 
+                            class="w-5 h-5" 
+                            :class="{ 'animate-bounce': isFavorite(country) }"
+                            fill="currentColor" 
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                          </svg>
+                          <span class="text-sm">Favorite</span>
+                        </button>
+                        <button
+                          @click.stop="toggleComparison(country)"
+                          class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-sm hover:shadow-md transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                          :class="{ 'text-blue-500 dark:text-blue-400': isInComparison(country) }"
+                          :disabled="comparisonList.length >= 3 && !isInComparison(country)"
+                          :title="isInComparison(country) ? 'Remove from Comparison' : 'Add to Comparison'"
+                        >
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <span class="text-sm">Compare</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- List View -->
+              <div v-else-if="currentView === 'list'" key="list" class="divide-y divide-gray-200 dark:divide-gray-700">
+                <div
+                  v-for="country in paginatedCountries"
+                  :key="country.name.common"
+                  class="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-200 relative"
+                >
+                  <!-- Flag image -->
+                  <div class="w-16 h-12 flex-shrink-0" @click="openCountryModal(country)">
+                    <img 
+                      :src="country.flags.png" 
+                      :alt="country.name.common + ' flag'"
+                      class="w-full h-full object-cover rounded"
+                      loading="lazy"
+                      onerror="this.src='https://via.placeholder.com/320x200?text=No+Flag'"
+                    />
+                  </div>
+
+                  <div class="flex-grow grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+                    <div class="sm:col-span-2" @click="openCountryModal(country)">
+                      <h3 class="font-semibold text-gray-800 dark:text-white">{{ country.name.common }}</h3>
+                      <div class="text-sm text-gray-600 dark:text-gray-300">
+                        <p><span class="font-medium">Capital:</span> {{ country.capital?.[0] || 'N/A' }}</p>
+                      </div>
+                    </div>
+                    
+                    <div class="text-sm text-gray-600 dark:text-gray-300" @click="openCountryModal(country)">
+                      <p><span class="font-medium">Region:</span> {{ country.region }}</p>
+                      <p><span class="font-medium">Population:</span> {{ country.population.toLocaleString() }}</p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-2 justify-end">
+                      <button
+                        @click.stop="toggleFavorite(country)"
+                        class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-sm hover:shadow-md transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        :class="{ 'text-yellow-400 dark:text-yellow-300': isFavorite(country) }"
+                        :title="isFavorite(country) ? 'Remove from Favorites' : 'Add to Favorites'"
+                      >
+                        <svg 
+                          class="w-5 h-5" 
+                          :class="{ 'animate-bounce': isFavorite(country) }"
+                          fill="currentColor" 
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                      </button>
+                      <button
+                        @click.stop="toggleComparison(country)"
+                        class="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-sm hover:shadow-md transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        :class="{ 'text-blue-500 dark:text-blue-400': isInComparison(country) }"
+                        :disabled="comparisonList.length >= 3 && !isInComparison(country)"
+                        :title="isInComparison(country) ? 'Remove from Comparison' : 'Add to Comparison'"
+                      >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Table View -->
+              <div v-else key="table">
+                <CountriesTable 
+                  :countries="filteredCountries"
+                  :is-dark-mode="isDarkMode"
+                />
+              </div>
+            </Transition>
+
+            <!-- Pagination (hide for dashboard and table view) -->
+            <div v-if="currentView !== 'dashboard' && currentView !== 'table'" class="flex justify-center items-center gap-4 mt-6">
+              <button
+                @click="prevPage" 
+                :disabled="currentPage === 1"
+                class="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
+              >
+                Previous
+              </button>
+              <span class="text-gray-600 dark:text-gray-300">
+                Page {{ currentPage }} of {{ totalPages }}
+              </span>
+              <button
+                @click="nextPage" 
+                :disabled="currentPage === totalPages"
+                class="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div v-if="showComparison" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-start mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Compare Countries</h2>
+            <div class="flex gap-4">
+              <button
+                @click="clearComparison"
+                class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              >
+                Clear All
+              </button>
+              <button
+                @click="showComparison = false"
+                class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Comparison Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div v-for="country in comparisonList" :key="country.name.common" class="space-y-6">
+              <div class="flex justify-center">
+                <img :src="country.flags.png" :alt="country.name.common" class="h-32 rounded-lg shadow-lg">
+              </div>
+              <div class="space-y-4">
+                <div>
+                  <h3 class="font-semibold text-xl text-gray-800 dark:text-white">{{ country.name.common }}</h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">{{ country.name.official }}</p>
+                </div>
+
+                <!-- Weather information -->
+                <div v-if="comparisonWeather[country.name.common]" class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h4 class="font-semibold text-gray-800 dark:text-white mb-2">Weather in {{ country.capital?.[0] }}</h4>
+                  <div class="flex items-center gap-2">
+                    <img 
+                      :src="comparisonWeather[country.name.common].icon" 
+                      :alt="comparisonWeather[country.name.common].description" 
+                      class="w-10 h-10"
+                    >
+                    <div>
+                      <p class="text-lg font-bold text-gray-800 dark:text-white">
+                        {{ comparisonWeather[country.name.common].temp }}°C
+                      </p>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 capitalize">
+                        {{ comparisonWeather[country.name.common].description }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Local time -->
+                <div v-if="comparisonTime[country.name.common]" class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h4 class="font-semibold text-gray-800 dark:text-white mb-2">Local Time</h4>
+                  <p class="text-2xl font-mono font-bold text-gray-800 dark:text-white text-center">
+                    {{ comparisonTime[country.name.common] }}
+                  </p>
+                </div>
+
+                <div class="space-y-2">
+                  <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Capital:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ country.capital?.[0] || 'N/A' }}</span>
+                  </div>
+                  <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Region:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ country.region }}</span>
+                  </div>
+                  <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Population:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ country.population.toLocaleString() }}</span>
+                  </div>
+                  <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Area:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ country.area.toLocaleString() }} km²</span>
+                  </div>
+                  <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Languages:</span>
+                    <span class="text-gray-600 dark:text-gray-400">
+                      {{ Object.values(country.languages || {}).join(', ') || 'N/A' }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Currencies:</span>
+                    <span class="text-gray-600 dark:text-gray-400">
+                      {{ Object.values(country.currencies || {})
+                          .map(c => `${c.name} (${c.symbol})`)
+                          .join(', ') || 'N/A' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Country Details Modal -->
+    <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+        <!-- Modal header -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex justify-between items-center">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white">{{ selectedCountry?.name.common }}</h2>
+            <button @click="closeModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Page navigation -->
+          <div class="flex justify-center items-center gap-4 mt-4">
+            <button 
+              @click="prevModalPage" 
+              :disabled="currentModalPage === 1"
+              class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span class="text-sm text-gray-600 dark:text-gray-400">
+              Page {{ currentModalPage }} of {{ totalModalPages }}
+            </span>
+            <button 
+              @click="nextModalPage" 
+              :disabled="currentModalPage === totalModalPages"
+              class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal content -->
+        <div class="p-6">
+          <!-- Page 1: Basic Information -->
+          <div v-if="currentModalPage === 1" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Flag and basic info -->
+              <div>
+                <img 
+                  :src="selectedCountry?.flags.png" 
+                  :alt="selectedCountry?.name.common + ' flag'"
+                  class="w-full h-48 object-cover rounded-lg shadow-lg mb-4"
+                />
+                <div class="space-y-2">
+                  <p class="text-gray-600 dark:text-gray-300">
+                    <span class="font-medium">Official Name:</span> {{ selectedCountry?.name.official }}
+                  </p>
+                  <p class="text-gray-600 dark:text-gray-300">
+                    <span class="font-medium">Capital:</span> {{ selectedCountry?.capital?.[0] || 'N/A' }}
+                  </p>
+                  <p class="text-gray-600 dark:text-gray-300">
+                    <span class="font-medium">Region:</span> {{ selectedCountry?.region }}
+                  </p>
+                  <p class="text-gray-600 dark:text-gray-300">
+                    <span class="font-medium">Population:</span> {{ selectedCountry?.population.toLocaleString() }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Weather and time -->
+              <div class="space-y-6">
+                <!-- Weather information -->
+                <div v-if="weatherData" class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Weather in {{ selectedCountry?.capital?.[0] }}</h3>
+                  <div class="flex items-center gap-4">
+                    <img 
+                      :src="weatherData.icon" 
+                      :alt="weatherData.description"
+                      class="w-16 h-16"
+                    />
+                    <div>
+                      <p class="text-2xl font-bold text-gray-800 dark:text-white">{{ weatherData.temp }}°C</p>
+                      <p class="text-gray-600 dark:text-gray-400 capitalize">{{ weatherData.description }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Local time -->
+                <div v-if="localTime" class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Local Time</h3>
+                  <p class="text-3xl font-mono text-center text-gray-800 dark:text-white">{{ localTime }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Page 2: Additional Information -->
+          <div v-if="currentModalPage === 2" class="space-y-6">
+            <!-- Languages and Currencies -->
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+              <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Languages and Currencies</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 class="font-medium text-gray-700 dark:text-gray-300 mb-2">Languages</h4>
+                  <ul class="list-disc list-inside text-gray-600 dark:text-gray-400">
+                    <li v-for="lang in Object.values(selectedCountry?.languages || {})" :key="lang">
+                      {{ lang }}
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-700 dark:text-gray-300 mb-2">Currencies</h4>
+                  <ul class="list-disc list-inside text-gray-600 dark:text-gray-400">
+                    <li v-for="(currency, code) in selectedCountry?.currencies" :key="code">
+                      {{ currency.name }} ({{ currency.symbol }})
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Additional Statistics -->
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+              <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Additional Statistics</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p class="text-gray-600 dark:text-gray-400">
+                    <span class="font-medium">Area:</span> {{ selectedCountry?.area.toLocaleString() }} km²
+                  </p>
+                  <p class="text-gray-600 dark:text-gray-400">
+                    <span class="font-medium">Population Density:</span>
+                    {{ selectedCountry ? Math.round(selectedCountry.population / selectedCountry.area).toLocaleString() : 0 }} people/km²
+                  </p>
+                </div>
+                <div v-if="distanceToCountry">
+                  <p class="text-gray-600 dark:text-gray-400">
+                    <span class="font-medium">Distance from your location:</span>
+                    {{ Math.round(distanceToCountry).toLocaleString() }} km
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+/* Improve image loading and display */
+img {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: block;
+  max-width: 100%;
+}
+
+/* Improve button visibility in dark mode */
+.dark button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Star animation */
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-25%);
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1s ease infinite;
+}
+
+/* Transiciones entre vistas */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-enter-to,
+.fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+</style>
