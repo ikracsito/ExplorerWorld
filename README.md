@@ -2,9 +2,9 @@
 
 Una aplicación web moderna que te permite explorar información detallada sobre todos los países del mundo. Construida con Vue 3, TypeScript, Tailwind CSS y AG Grid. 
 
-## ✨ Características Principales
+##  Características Principales
 
-- 🌍 **Información Completa**: Datos detallados de todos los países, incluyendo:
+- **Información Completa**: Datos detallados de todos los países, incluyendo:
   - Población
   - Capital
   - Región
@@ -23,7 +23,7 @@ Una aplicación web moderna que te permite explorar información detallada sobre
   - Hora local de cada país
   - Distancia desde tu ubicación
 
-- 💡 **Características Adicionales**:
+-  **Características Adicionales**:
   - 🌓 Modo oscuro/claro
   - 💾 Sistema de favoritos
   - 🔄 Comparación entre países
@@ -40,7 +40,7 @@ Para ejecutar este proyecto necesitarás:
 - Navegador web moderno (Chrome, Firefox, Safari, Edge)
 - Conexión a internet (para las APIs de clima y mapas)
 
-## 📦 Instalación
+## Instalación
 
 ### 1️ Clonar el Repositorio
 
@@ -100,7 +100,7 @@ yarn dev
 
 La aplicación estará disponible en: http://localhost:5173
 
-## 🛠️ Comandos Disponibles
+## 🛠 Comandos Disponibles
 
 ```bash
 # Iniciar en modo desarrollo
@@ -113,7 +113,7 @@ npm run build
 npm run preview
 ```
 
-## 📱 Uso de la Aplicación
+## Uso de la Aplicación
 
 ### Navegación
 - Usa la barra superior para cambiar entre diferentes vistas
