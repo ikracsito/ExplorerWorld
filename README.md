@@ -31,7 +31,7 @@ Una aplicación web moderna que te permite explorar información detallada sobre
   - 🗺️ Mapas integrados
   - 📱 Diseño responsive para todos los dispositivos
 
-## 🚀 Requisitos Previos
+## Requisitos Previos
 
 Para ejecutar este proyecto necesitarás:
 
