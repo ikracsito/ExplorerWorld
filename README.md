@@ -1,79 +1,181 @@
-# WorldExplorer - Countries App
+# WorldExplorer - Explorador de Países 🌎
 
-A modern web application built with Vue 3, TypeScript, and Tailwind CSS that allows users to explore information about countries around the world. The app includes features like weather information, time zones, country comparison, and more.
+Una aplicación web moderna que te permite explorar información detallada sobre todos los países del mundo. Construida con Vue 3, TypeScript y Tailwind CSS, ofrece una experiencia interactiva y amigable para descubrir datos interesantes sobre cualquier país.
 
-## Features
+![Vista previa de la aplicación](preview.png)
 
-- 🌍 View detailed information about countries worldwide
-- 🌤️ Real-time weather information for capital cities
-- ⏰ Local time display for each country
-- 📊 Multiple view options (Grid, List, Table)
-- 🌓 Dark/Light mode support
-- 💾 Favorites system with local storage
-- 📱 Fully responsive design
-- 🔄 Country comparison feature
-- 📈 Interactive dashboard with statistics
-- 🗺️ OpenStreetMap integration
+## ✨ Características Principales
 
-## Prerequisites
+- 🌍 **Información Completa**: Datos detallados de todos los países, incluyendo:
+  - Población
+  - Capital
+  - Región
+  - Idiomas
+  - Monedas
+  - Y mucho más...
 
-- Node.js (v14 or higher)
-- npm or yarn
+- 🎨 **Múltiples Vistas**:
+  - Vista de Cuadrícula (Grid)
+  - Vista de Lista
+  - Vista de Tabla
+  - Panel de Control con Estadísticas
 
-## Installation
+- 🌤️ **Información en Tiempo Real**:
+  - Clima actual en las capitales
+  - Hora local de cada país
+  - Distancia desde tu ubicación
 
-1. Clone the repository:
+- 💡 **Características Adicionales**:
+  - 🌓 Modo oscuro/claro
+  - 💾 Sistema de favoritos
+  - 🔄 Comparación entre países
+  - 📊 Estadísticas interactivas
+  - 🗺️ Mapas integrados
+  - 📱 Diseño responsive para todos los dispositivos
+
+## 🚀 Requisitos Previos
+
+Para ejecutar este proyecto necesitarás:
+
+- Node.js (versión 14 o superior)
+- npm (viene con Node.js) o yarn
+- Navegador web moderno (Chrome, Firefox, Safari, Edge)
+- Conexión a internet (para las APIs de clima y mapas)
+
+## 📦 Instalación
+
+### 1️⃣ Clonar el Repositorio
+
+Tienes tres opciones:
+
+a) **Usando Git** (si lo tienes instalado):
 ```bash
-git clone <your-repository-url>
+git clone <url-del-repositorio>
 cd WorldExplorer
 ```
 
-2. Install dependencies:
+b) **Descarga directa**:
+- Ve a la página principal del repositorio
+- Haz clic en el botón verde "Code"
+- Selecciona "Download ZIP"
+- Descomprime el archivo en tu computadora
+
+c) **GitHub Desktop**:
+- Abre GitHub Desktop
+- Ve a File -> Clone Repository
+- Selecciona este repositorio
+- Elige una ubicación en tu computadora
+
+### 2️⃣ Instalar Dependencias
+
+Abre una terminal en la carpeta del proyecto y ejecuta:
+
 ```bash
+# Si usas npm:
 npm install
-# or
+
+# Si usas yarn:
 yarn install
 ```
 
-3. Create a `.env` file in the root directory and add your API keys:
-```env
-VITE_OPENWEATHER_API_KEY=your_openweather_api_key
-VITE_TIMEZONE_API_KEY=your_timezone_api_key
-```
+### 3️⃣ Configurar Variables de Entorno
 
-4. Start the development server:
+1. Crea un archivo llamado `.env` en la raíz del proyecto
+2. Copia el siguiente contenido:
+```env
+VITE_OPENWEATHER_API_KEY=tu_clave_de_openweather
+VITE_TIMEZONE_API_KEY=tu_clave_de_timezone
+```
+3. Reemplaza los valores con tus propias claves API:
+   - Obtén tu clave de OpenWeather en: https://openweathermap.org/api
+   - Obtén tu clave de TimezoneDB en: https://timezonedb.com/
+
+### 4️⃣ Iniciar el Proyecto
+
 ```bash
+# Usando npm:
 npm run dev
-# or
+
+# Usando yarn:
 yarn dev
 ```
 
-## Building for Production
+La aplicación estará disponible en: http://localhost:5173
+
+## 🛠️ Comandos Disponibles
 
 ```bash
+# Iniciar en modo desarrollo
+npm run dev
+
+# Construir para producción
 npm run build
-# or
-yarn build
+
+# Previsualizar la versión de producción
+npm run preview
 ```
 
-## Technologies Used
+## 📱 Uso de la Aplicación
 
-- Vue 3 with Composition API
-- TypeScript
-- Tailwind CSS
-- Axios
-- OpenWeather API
-- TimezoneDB API
-- OpenStreetMap
+### Navegación
+- Usa la barra superior para cambiar entre diferentes vistas
+- El botón de modo oscuro está en la esquina superior derecha
+- Utiliza la barra de búsqueda para encontrar países
+- Filtra por región usando el menú desplegable
 
-## License
+### Funciones Principales
+1. **Búsqueda de Países**:
+   - Escribe en la barra de búsqueda
+   - Los resultados se actualizan automáticamente
 
-MIT License - feel free to use this project for your own purposes.
+2. **Favoritos**:
+   - Haz clic en la estrella para agregar/quitar de favoritos
+   - Los favoritos se guardan automáticamente
 
-## Contributing
+3. **Comparación**:
+   - Selecciona hasta 3 países para comparar
+   - Haz clic en el botón "Comparar" para ver detalles
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+4. **Detalles del País**:
+   - Haz clic en cualquier país para ver información detallada
+   - Navega entre las pestañas para ver diferentes datos
+
+## 🔧 Solución de Problemas Comunes
+
+### La aplicación no carga
+1. Verifica tu conexión a internet
+2. Asegúrate de que todas las dependencias están instaladas
+3. Comprueba que las claves API en `.env` son correctas
+
+### No se muestra el clima
+1. Verifica tu clave de OpenWeather
+2. Asegúrate de tener conexión a internet
+3. Comprueba la consola del navegador para ver errores
+
+### Problemas con la geolocalización
+1. Permite el acceso a la ubicación en tu navegador
+2. Actualiza la página después de dar permisos
+
+##  Contribuir al Proyecto
+
+¿Quieres contribuir? ¡Excelente! Aquí te explicamos cómo:
+
+1. Haz un "Fork" del repositorio
+2. Crea una rama para tu función: `git checkout -b nueva-funcion`
+3. Haz tus cambios y commitea: `git commit -m 'Agrega nueva función'`
+4. Sube tus cambios: `git push origin nueva-funcion`
+5. Crea un Pull Request
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT - mira el archivo [LICENSE.md](LICENSE.md) para detalles
+
+
+## Agradecimientos
+
+- [REST Countries API](https://restcountries.com/) por los datos de países
+- [OpenWeather](https://openweathermap.org/) por la información del clima
+- [TimezoneDB](https://timezonedb.com/) por los datos de zonas horarias
+- [OpenStreetMap](https://www.openstreetmap.org/) por los mapas
+
+---
